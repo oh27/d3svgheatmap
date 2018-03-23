@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+
+body {
+  padding-top: 20px;
+  background-color: #ccc;
+}
+
+svg {
+  border: 1px solid #d2d2d2;
+  padding: 20px;
+  box-shadow: 5px 5px 5px rgba(68, 68, 68, 0.6);
+  display: block;
+  margin: auto;
+  background-color: white;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: black;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  font-family: sans-serif;
+  font-size: 11px;
+}
+
+.tooltip {
+    pointer-events:none; /*let mouse events pass through*/
+    opacity:0;
+    transition: opacity 0.3s;
+    text-shadow:2px 2px 2px gray;
+}
+
+div.tooltip {
+  border-radius: 9px;
+  background-color: rgba(210, 210, 210, 1.0);
+  border:solid gray 1px;
+  padding: 3px 5px 2px 4px;
+  position: absolute;
+  text-align:center;
+  box-shadow: 5px 5px 5px rgba(68, 68, 68, 0.6);
+}
+</style>
+<script  src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js">
+</script>
+<script  src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.11.0/d3.min.js">
+</script>
+
+</head>
+<body>
+<div class="mouse tooltip" ></div>
+<div id="svg-chart"></div>
+
+<script>
+  $(document).ready(function() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        var temperatureData = JSON.parse(this.responseText);
+        displayChart(temperatureData);
+      }
+    };
+    xhttp.open(
+      "GET",
+      "https://raw.githubusercontent.com/FreeCodeCamp/ProjectReferenceData/master/global-temperature.json",
+      true
+    );
+    xhttp.send();
+  });
+
+  function displayChart(temperatureData) {
+    var margin = { top: 100, right: 50, bottom: 70, left: 100 },
+        width = 1100 - margin.left - margin.right,
+        height = 700 - margin.top - margin.bottom;
+
+    var xScale = d3.scaleLinear()
+      .rangeRound([0, width])
+
+    var yScale = d3.scaleLinear()
+      .range([0, height])
+
+    var xAxis = d3.axisBottom(xScale).ticks(20, 'r')
+
+    //var yAxis = d3.axisLeft(yScale).ticks(12)
+
+    var svg = d3.select("#svg-chart")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var monthlyVariance = temperatureData.monthlyVariance
+
+    xScale.domain([monthlyVariance[0].year, monthlyVariance[monthlyVariance.length-1].year])
+
+    yScale.domain([1, 13])
+
+    // examine the the variance in the entire set to get a min and max
+    var maxVariance = -999
+    var minVariance =  999
+    var monthlyVariance = temperatureData.monthlyVariance
+    for(var i=0; i<monthlyVariance.length; i++) {
+      if (monthlyVariance[i].variance > maxVariance) {
+        maxVariance = monthlyVariance[i].variance
+      }
+      if (monthlyVariance[i].variance < minVariance) {
+        minVariance = monthlyVariance[i].variance
+      }
+    }
+
+    // variance:  min = -6.976   max = 5.228
+
+    const colors = ['#5E4FA2', '#3288BD','#66C2A5','#ABDDA4','#E6F598','#FFFFBF','#FEE08B','#FDAE61','#F46D43','#D53E4F','#9E0142',]
+    const varianceRange = maxVariance - minVariance
+    const varianceDegPerColor = varianceRange / colors.length
+
+
+
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    var tooltip = d3.selectAll(".tooltip:not(.css)");
+    var HTMLmouseTip = d3.select("div.tooltip.mouse");
+
+    const rectHeight = yScale(2)-yScale(1)
+    const rectWidth = xScale(1900)-xScale(1899)
+
+    svg.selectAll('.cell')
+      .data(temperatureData.monthlyVariance)
+      .enter().append('rect')
+      .attr("x", function(d) { return xScale(d.year) })
+      .attr("y", function(d) { return yScale(d.month) })
+      .attr('width', function() { return rectWidth })
+      .attr('height', function() { return rectHeight })
+      .attr("fill", function(d) {
+                      var x = d.variance - minVariance
+                      x = Math.round(x/varianceDegPerColor)
+                      if (x < 0) x = 0
+                      if (x > colors.length-1) x = colors.length-1
+                      return colors[x]
+                    })
+      .on("mouseover", function(d) {
+        tooltip.style("opacity", "1");
+        // set the tooltip data
+        tooltip.style("color", "black").html(
+           months[d.month-1] + " " + d.year +
+           "<br>Variance: " + d.variance + " °C"
+        );
+        HTMLmouseTip.style("left", Math.max(0, d3.event.pageX + 10) + "px").style(
+          "top",
+          d3.event.pageY - 10 + "px"
+        );
+      })
+      .on("mousemove", function() {
+        HTMLmouseTip.style("left", Math.max(0, d3.event.pageX + 10) + "px").style(
+          "top",
+          d3.event.pageY - 10 + "px"
+        );
+      })
+      .on("mouseout", function(d) {
+        return tooltip.style("opacity", "0");
+      });
+
+    // finish up the axis drawing
+    svg.append("g")
+          .attr("class", "x axis")
+          .attr("transform", "translate(0," + height + ")")
+          .call(xAxis)
+          .append("text")
+          .attr("transform", "rotate(0)")
+          .attr("y", 6)
+          .attr("dy", "1.91em")
+          .style("text-anchor", "middle");
+
+    /*
+    svg.append("g")
+          .attr("class", "y axis")
+          .call(yAxis);*/
+
+    // now add titles to the axes
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ (-margin.left + margin.left/9) +","+(height/2)+")rotate(-90)")  // text is drawn off the screen top left, move down and out and rotate
+        .text("Months");
+
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ ((width+margin.left)/2) +","+(height+margin.bottom/2+20)+")")  // centre below axis
+        .text("Years")
+
+    var offset = -margin.top/20 * 13
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ ((width+margin.left)/2) +","+ offset +")")
+        .attr("font-size", "30px")
+        .style("text-shadow", "2px 2px 2px gray")
+        .text("Monthly Global Land-Surface Temperature")
+
+    offset += 25
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ ((width+margin.left)/2) +","+ offset +")")
+        .attr("font-size", "24px")
+        .style("text-shadow", "2px 2px 2px gray")
+        .text("1753 - 2015")
+
+    offset += 16
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ ((width+margin.left)/2) +","+ offset +")")
+        .attr("font-size", "14px")
+        .style("text-shadow", "2px 2px 2px gray")
+        .text("Temperatures are in Celsius and reported as anomalies relative to Jan 1953-Dec 1980 average.")
+
+    offset += 16
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate("+ ((width+margin.left)/2) +","+ offset +")")
+        .attr("font-size", "14px")
+        .style("text-shadow", "2px 2px 2px gray")
+        .text("Estimated Jan 1951-Dec 1980 absolute temperature °C: 8.66 +/- 0.07")
+
+    for (var i=0; i<12; i++) {
+      svg.append("text")
+          .attr("text-anchor", "end")
+          .attr("transform", "translate("+ -10 +","+( yScale(i+1) + rectHeight/2+5)+")")
+          .text(months[i])
+
+          // draw legend
+    var legend = svg.selectAll(".legend")
+      .data(colors)
+      .enter().append("g")
+        .attr("class", "legend")
+        .attr("transform", function(d, i) { return "translate(" + i * 30 + ", 0 )"   });
+
+    // draw legend colored rectangles
+    legend.append("rect")
+        .attr("x", width/2 + width/7)
+        .attr("y", height + margin.bottom/2)
+        .attr("width", 30)
+        .attr("height", 18)
+        .style("fill", function(d){return d});
+
+    // draw legend text
+    legend.append("text")
+        .attr("x", width/2 + width/7 + 8)
+        .attr("y", height+margin.bottom/2 + 25)
+        .attr("dy", ".35em")
+        .style("text-anchor", "start")
+        .attr("font_family", "sans-serif")  // Font type
+        .attr("font-size", "11px")  // Font size
+        .text(function(d, i) {
+                    return Math.round((minVariance + varianceDegPerColor*i)*10)/10
+                  })
+    }
+  }
+</script>
+</body>
+</html>
